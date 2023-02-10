@@ -56,8 +56,9 @@ class PaperConfig:
         sticker_corner_radius: float,
         left_margin: float,
         top_margin: float,
-        horizontal_stride: float,
-        vertical_stride: float,
+        horizontal_spacing: float,
+        vertical_spacing: float,
+        rows_columns: Tuple[int, int] = None
     ) -> None:
         self.pagesize = pagesize
         self.sticker_width = sticker_width
@@ -65,8 +66,9 @@ class PaperConfig:
         self.sticker_corner_radius = sticker_corner_radius
         self.left_margin = left_margin
         self.top_margin = top_margin
-        self.horizontal_stride = horizontal_stride
-        self.vertical_stride = vertical_stride
+        self.horizontal_spacing = horizontal_spacing
+        self.vertical_spacing = vertical_spacing
+        self.rows_columns = rows_columns
 
 
 AVERY_5260 = PaperConfig(
@@ -76,8 +78,8 @@ AVERY_5260 = PaperConfig(
     sticker_corner_radius=0.1 * inch,
     left_margin=3/16 * inch,
     top_margin=0.5 * inch,
-    horizontal_stride=(2 + 6/8) * inch,
-    vertical_stride=1 * inch,
+    horizontal_spacing=(2 + 6/8) * inch,
+    vertical_spacing=1 * inch,
 )
 
 
@@ -88,8 +90,8 @@ AVERY_L7157 = PaperConfig(
     sticker_corner_radius=3 * mm,
     left_margin=6.4 * mm,
     top_margin=14.1 * mm,
-    horizontal_stride=66.552 * mm,
-    vertical_stride=24.3 * mm,
+    horizontal_spacing=66.552 * mm,
+    vertical_spacing=24.3 * mm,
 )
 
 
@@ -100,17 +102,27 @@ EJ_RANGE_24 = PaperConfig(
     sticker_corner_radius=2 * mm,
     left_margin=6.5 * mm,
     top_margin=13.2 * mm,
-    horizontal_stride=66.45 * mm,
-    vertical_stride=33.9 * mm,
+    horizontal_spacing=66.45 * mm,
+    vertical_spacing=33.9 * mm,
+)
+
+HOUSE_BRAND_STUFF = PaperConfig(
+    pagesize = A4,
+    sticker_width = 60 * mm,
+    sticker_height = 25 * mm,
+    sticker_corner_radius = 2 * mm,
+    left_margin = 11.3 * mm,
+    top_margin = 1.2* mm,
+    horizontal_spacing = 3.6 * mm,
+    vertical_spacing = 5.02 * mm,
+    rows_columns = [9, 3]
 )
 
 
 class StickerRect:
-    def __init__(self, c: canvas.Canvas, layout: PaperConfig, row: int, column: int, mirror: bool = True):
-        self.left = layout.left_margin + layout.horizontal_stride * column
-        self.bottom = layout.pagesize[1] - (
-            layout.sticker_height + layout.top_margin + layout.vertical_stride * row
-        )
+    def __init__(self, c: canvas.Canvas, layout: PaperConfig, x: int, y: int, mirror: bool = True):
+        self.x = x
+        self.y = y
         self.width = layout.sticker_width
         self.height = layout.sticker_height
         self.corner = layout.sticker_corner_radius
@@ -119,7 +131,6 @@ class StickerRect:
         self._c = c
 
     def __enter__(self):
-
         if self._mirror:
             pagewidth = self._c._pagesize[0]
             pageheight = self._c._pagesize[1]
@@ -434,21 +445,21 @@ def get_eia98_code(value):
     return digits + multiplier
 
 
-def draw_resistor_sticker(c, layout, row, column, ohms, draw_center_line=True, mirror=False):
-    with StickerRect(c, layout, row, column, mirror) as rect:
-
+def draw_resistor_sticker(c: canvas.Canvas, layout, x, y, ohms, draw_center_line=True, mirror=False):
+    with StickerRect(c, layout, x, y, mirror) as rect:
         # Squish horizontally by a bit, to prevent clipping
         rect.width -= 0.1*inch
-        rect.left += 0.05*inch
-
+        rect.x += 0.05*inch
         # Draw middle line
         if draw_center_line:
             c.setStrokeColor(black, 0.25)
             c.setLineWidth(0.7)
-            c.line(rect.left,
-                   rect.bottom + rect.height/2,
-                   rect.left + rect.width,
-                   rect.bottom + rect.height/2)
+            c.line(
+                    rect.x,
+                    rect.y + rect.height/2,
+                    rect.x + rect.width,
+                    rect.y + rect.height/2
+                )
 
         # Draw resistor value
         resistor_value = ResistorValue(ohms)
@@ -464,8 +475,8 @@ def draw_resistor_sticker(c, layout, row, column, ohms, draw_center_line=True, m
         value_width = c.stringWidth(value_string, 'Arial Bold', value_font_size * 1.35)
         ohm_width = c.stringWidth(ohm_string, 'Arial Bold', ohm_font_size * 1.35)
         total_text_width = ohm_width + value_width + space_between
-        text_left = rect.left + rect.width/4 - total_text_width/2
-        text_bottom = rect.bottom + rect.height/4 - value_font_size/2
+        text_left = rect.x + rect.width/4 - total_text_width/2
+        text_bottom = rect.y + rect.height/4 - value_font_size/2
 
         c.setFont('Arial Bold', value_font_size * 1.35)
         c.drawString(text_left, text_bottom, value_string)
@@ -475,54 +486,119 @@ def draw_resistor_sticker(c, layout, row, column, ohms, draw_center_line=True, m
         # Draw resistor color code
         draw_resistor_colorcode(c, resistor_value,
                                 toColor("hsl(55, 54%, 100%)"), toColor("hsl(55, 54%, 70%)"),
-                                rect.left + rect.width/2,
-                                rect.bottom + rect.height/4 - rect.height/45,
+                                rect.x + rect.width/2,
+                                rect.y + rect.height/4 - rect.height/45,
                                 rect.width/4, rect.height/4,
                                 3)
 
         draw_resistor_colorcode(c, resistor_value,
                                 toColor("hsl(197, 59%, 100%)"), toColor("hsl(197, 59%, 73%)"),
-                                rect.left + rect.width * 0.75,
-                                rect.bottom + rect.height/4 - rect.height/45,
+                                rect.x + rect.width * 0.75,
+                                rect.y + rect.height/4 - rect.height/45,
                                 rect.width/4, rect.height/4,
                                 4)
 
         c.setFont('Arial Bold', smd_font_size * 1.35)
-        c.drawString(rect.left + rect.width/2 + rect.width/32, rect.bottom +
-                     rect.height/13, get_3digit_code(resistor_value))
-        c.drawCentredString(rect.left + rect.width*3/4, rect.bottom +
+        c.drawString(rect.x + rect.width/2 + rect.width/32, rect.y +
+                        rect.height/13, get_3digit_code(resistor_value))
+        c.drawCentredString(rect.x + rect.width*3/4, rect.y +
                             rect.height/13, get_4digit_code(resistor_value))
-        c.drawRightString(rect.left + rect.width - rect.width/32, rect.bottom +
-                          rect.height/13, get_eia98_code(resistor_value))
+        c.drawRightString(rect.x + rect.width - rect.width/32, rect.y +
+                            rect.height/13, get_eia98_code(resistor_value))
+
+def calculate_rows_columns(layout: PaperConfig):
+    rows = math.floor((layout.pagesize[1] + layout.vertical_spacing - layout.top_margin) / (layout.sticker_height + layout.vertical_spacing))
+    columns = math.floor((layout.pagesize[0] + layout.horizontal_spacing - layout.left_margin)  / (layout.sticker_width + layout.horizontal_spacing))
+
+    return [rows, columns]
 
 
 def render_stickers(c, layout: PaperConfig, values, draw_center_line=True):
-    for (rowId, row) in enumerate(values):
-        for (columnId, value) in enumerate(row):
-            if value is None:
-                continue
-            draw_resistor_sticker(c, layout, rowId, columnId, value, draw_center_line, False)
-            if mirror:
-                draw_resistor_sticker(c, layout, rowId, columnId, value, False, True)
+    rows_columns = layout.rows_columns
+
+    if not rows_columns:
+        rows_columns = calculate_rows_columns(layout)
+
+    rows = rows_columns[0]
+    columns = rows_columns[1]
+    pages = math.ceil(len(values) / (rows * columns))
+    print(rows, columns, pages)
+    # for (rowId, row) in enumerate(values):
+    #     for (columnId, value) in enumerate(row):
+    #         if value is None:
+    #             continue
+
+    #         x = columnId * (layout.sticker_width + layout.horizontal_spacing) + layout.left_margin
+    #         y = layout.pagesize[1] - (rowId * (layout.sticker_height + layout.vertical_spacing) + layout.top_margin)
+
+    #         print(x, y)
+
+    #         if mirror:
+    #             draw_resistor_sticker(c, layout, x, y, value, False, True)
+    #         else:
+    #             draw_resistor_sticker(c, layout, x, y, value, draw_center_line, False)
+
+    index = 0
+    done = False
+    for page in range(pages):
+        for row in range(rows):
+            if done:
+                break
+
+            for column in range(columns):
+                try:
+                    value = values[index]
+                except IndexError:
+                    done = True
+                    break
+
+                if value is None:
+                    continue
+
+                x = column * (layout.sticker_width + layout.horizontal_spacing) + layout.left_margin
+                y = layout.pagesize[1] - (row * (layout.sticker_height + layout.vertical_spacing) + layout.sticker_height + layout.top_margin)
+
+                print(x, y)
+
+                if mirror:
+                    draw_resistor_sticker(c, layout, x, y, value, False, True)
+                else:
+                    draw_resistor_sticker(c, layout, x, y, value, draw_center_line, False)
+
+                index += 1
+        render_outlines(c, layout)
+        c.showPage()
+
 
 
 def render_outlines(c, layout: PaperConfig):
-    for y in range(3):
-        for x in range(10):
+    rows_columns = layout.rows_columns
+
+    if not rows_columns:
+        rows_columns = calculate_rows_columns(layout)
+
+    rows = rows_columns[0]
+    columns = rows_columns[1]
+
+    for row in range(rows):
+        for column in range(columns):
+            x = column * (layout.sticker_width + layout.horizontal_spacing) + layout.left_margin
+            y = layout.pagesize[1] - (row * (layout.sticker_height + layout.vertical_spacing) + layout.sticker_height + layout.top_margin)
+
             with StickerRect(c, layout, x, y, False) as rect:
                 c.setStrokeColor(black, 0.1)
                 c.setLineWidth(0)
-                c.roundRect(rect.left, rect.bottom, rect.width, rect.height, rect.corner)
+                c.roundRect(rect.x, rect.y, rect.width, rect.height, rect.corner)
 
 
 def main():
-
     # ############################################################################
     # Select the correct type of paper you want to print on.
     # ############################################################################
-    layout = AVERY_5260
+    # layout = AVERY_5260
     # layout = AVERY_L7157
     # layout = EJ_RANGE_24
+    layout = HOUSE_BRAND_STUFF
 
     # ############################################################################
     # Put your own resistor values in here!
@@ -535,16 +611,58 @@ def main():
     # Add "None" if no label should get generated at a specific position.
     # ############################################################################
     resistor_values = [
-        [0,            0.02,         .1],
-        [1,            12,           13],
-        [210,          220,          330],
-        [3100,         3200,         3300],
-        [41000,        42000,        43000],
-        [510000,       None,         530000],
-        [6100000,      6200000,      6300000],
-        [71000000,     72000000,     73000000],
-        [810000000,    820000000,    830000000],
-        [9100000000,   9200000000,   3300000000],
+        1, 1.2, 1.3,
+        1.5, 1.6, 1.8,
+        2, 2.2, 2.4,
+        2.7, 3, 3.3,
+        3.6, 3.9, 4.3,
+        4.7, 5.1, 5.6,
+        6.2, 6.8, 7.5,
+        8.2, 9.1, 10,
+        12, 15, 18,
+        20, 22, 24,
+        27, 30, 33,
+        36, 39, 43,
+        47, 51, 56,
+        62, 68, 75,
+        75, 82, 91,
+        100, 110, 120,
+        130, 150, 160,
+        180, 200, 220,
+        240, 270, 300,
+        330, 360, 390,
+        430, 470, 510,
+        560, 620, 690,
+        750, 820, 910,
+        1000, 1100, 1200,
+        1500, 1600, 1800,
+        2000, 2200, 2400,
+        2700, 3000, 3300,
+        3600, 3900, 4300,
+        4700, 5100, 5600,
+        6200, 6800, 7500,
+        8200, 9100, 10000,
+        11000, 12000, 13000,
+        15000, 16000, 18000,
+        20000, 22000, 24000,
+        27000, 30000, 33000,
+        36000, 39000, 43000,
+        47000, 51000, 56000,
+        62000, 68000, 75000,
+        82000, 91000, 100000,
+        110000, 120000, 130000,
+        150000, 160000, 180000,
+        200000, 240000, 270000,
+        300000, 330000, 360000,
+        390000, 430000, 510000,
+        560000, 620000, 680000,
+        750000, 820000, 910000,
+        1000000, 1200000, 1500000,
+        1800000, 2000000, 2200000,
+        2400000, 3000000, 3300000,
+        3900000, 4700000, 5100000,
+        5600000, 6200000, 6800000,
+        8200000, 10000000
     ]
 
     # Create the render canvas
@@ -553,12 +671,12 @@ def main():
     # Render the stickers
     render_stickers(c, layout, resistor_values)
 
-    # # Add this if you want to see the outlines of the labels.
-    # # Recommended to be commented out for the actual printing.
+    # # # Add this if you want to see the outlines of the labels.
+    # # # Recommended to be commented out for the actual printing.
     # render_outlines(c, layout)
 
-    # Store canvas to PDF file
-    c.showPage()
+    # # Store canvas to PDF file
+    # c.showPage()
     c.save()
 
 
